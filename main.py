@@ -43,7 +43,7 @@ class MazeGame:
         self.screen_size = 1200
         
         self.screen = pygame.display.set_mode((self.screen_size, self.screen_size))
-        pygame.display.set_caption("Corridor Maze Game")
+        pygame.display.set_caption("Picão 3")
         self.font = pygame.font.Font(None, 36)
         
         self._init_surfaces()
