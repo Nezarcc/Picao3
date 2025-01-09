@@ -27,6 +27,79 @@ class Position:
     def to_tuple(self):
         return (self.x, self.y)
 
+class MainMenu:
+    def __init__(self, screen, font):
+        self.screen = screen
+        self.font = font
+        screen_width, screen_height = self.screen.get_size()
+        button_width, button_height = 200, 50
+        self.buttons = {
+            "Play": pygame.Rect((screen_width - button_width) // 2, screen_height // 2 - 50, button_width, button_height),
+            "Quit": pygame.Rect((screen_width - button_width) // 2, screen_height // 2 + 50, button_width, button_height)
+        }
+
+    def draw(self):
+        self.screen.fill(Colors.WHITE.value)
+        title = self.font.render("Picão 3", True, Colors.BLACK.value)
+        self.screen.blit(title, (self.screen.get_width() // 2 - title.get_width() // 2, 450))
+
+        for text, rect in self.buttons.items():
+            pygame.draw.rect(self.screen, Colors.GRAY.value, rect)
+            label = self.font.render(text, True, Colors.BLACK.value)
+            self.screen.blit(label, (rect.x + (rect.width - label.get_width()) // 2, rect.y + (rect.height - label.get_height()) // 2))
+        
+        pygame.display.flip()
+
+    def handle_input(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.mouse.get_pos()
+                if self.buttons["Play"].collidepoint(mouse_pos):
+                    return "play"
+                elif self.buttons["Quit"].collidepoint(mouse_pos):
+                    return "quit"
+        return "menu"
+
+class PauseMenu:
+    def __init__(self, screen, font):
+        self.screen = screen
+        self.font = font
+        screen_width, screen_height = self.screen.get_size()
+        button_width, button_height = 200, 50
+        self.buttons = {
+            "Continue": pygame.Rect((screen_width - button_width) // 2, screen_height // 2 - 100, button_width, button_height),
+            "Main Menu": pygame.Rect((screen_width - button_width) // 2, screen_height // 2, button_width, button_height),
+            "Quit": pygame.Rect((screen_width - button_width) // 2, screen_height // 2 + 100, button_width, button_height)
+        }
+
+    def draw(self):
+        self.screen.fill(Colors.WHITE.value)
+        title = self.font.render("Paused", True, Colors.BLACK.value)
+        self.screen.blit(title, (self.screen.get_width() // 2 - title.get_width() // 2, 100))
+
+        for text, rect in self.buttons.items():
+            pygame.draw.rect(self.screen, Colors.GRAY.value, rect)
+            label = self.font.render(text, True, Colors.BLACK.value)
+            self.screen.blit(label, (rect.x + (rect.width - label.get_width()) // 2, rect.y + (rect.height - label.get_height()) // 2))
+        
+        pygame.display.flip()
+
+    def handle_input(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "quit"
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.mouse.get_pos()
+                if self.buttons["Continue"].collidepoint(mouse_pos):
+                    return "play"
+                elif self.buttons["Main Menu"].collidepoint(mouse_pos):
+                    return "menu"
+                elif self.buttons["Quit"].collidepoint(mouse_pos):
+                    return "quit"
+        return "paused"
+
 class MazeGame:
     DIRECTIONS = [Position(0, -1), Position(1, 0), Position(0, 1), Position(-1, 0)]
     GENERATION_DIRECTIONS = [Position(0, -2), Position(2, 0), Position(0, 2), Position(-2, 0)]
@@ -51,6 +124,10 @@ class MazeGame:
         self.initialize_new_maze()
         self.running = True
         self.clock = pygame.time.Clock()
+        
+        self.state = "menu"
+        self.main_menu = MainMenu(self.screen, self.font)
+        self.pause_menu = PauseMenu(self.screen, self.font)
 
     def _init_surfaces(self):
         self.cell_surfaces = {}
@@ -262,6 +339,8 @@ class MazeGame:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.state = "paused"
 
     def next_level(self):
         self.level += 1
@@ -275,9 +354,18 @@ class MazeGame:
 
     def run(self):
         while self.running:
-            self.handle_input()
-            self.draw_maze()
-            self.clock.tick(60)
+            if self.state == "menu":
+                self.state = self.main_menu.handle_input()
+                self.main_menu.draw()
+            elif self.state == "play":
+                self.handle_input()
+                self.draw_maze()
+                self.clock.tick(60)
+            elif self.state == "paused":
+                self.state = self.pause_menu.handle_input()
+                self.pause_menu.draw()
+            elif self.state == "quit":
+                self.running = False
         
         pygame.quit()
 
