@@ -15,6 +15,7 @@ class Colors(Enum):
     GREEN = (0, 255, 0)
     GRAY = (150, 150, 150)
     YELLOW = (255, 255, 0)
+    BLUE = (0, 0, 255)
 
 @dataclass(slots=True, frozen=True)
 class Position:
@@ -28,11 +29,12 @@ class Position:
         return (self.x, self.y)
 
 class MainMenu:
-    def __init__(self, screen, font):
+    def __init__(self, screen):
         self.screen = screen
-        self.font = font
         screen_width, screen_height = self.screen.get_size()
         button_width, button_height = 200, 50
+        self.font_large = pygame.font.Font(None, 100)
+        self.font = pygame.font.Font(None, 36)
         self.buttons = {
             "Play": pygame.Rect((screen_width - button_width) // 2, screen_height // 2 - 50, button_width, button_height),
             "Quit": pygame.Rect((screen_width - button_width) // 2, screen_height // 2 + 50, button_width, button_height)
@@ -40,8 +42,8 @@ class MainMenu:
 
     def draw(self):
         self.screen.fill(Colors.WHITE.value)
-        title = self.font.render("Picão 3", True, Colors.BLACK.value)
-        self.screen.blit(title, (self.screen.get_width() // 2 - title.get_width() // 2, 450))
+        title = self.font_large.render("Picão 3", True, Colors.BLACK.value)
+        self.screen.blit(title, (self.screen.get_width() // 2 - title.get_width() // 2, 425))
 
         for text, rect in self.buttons.items():
             pygame.draw.rect(self.screen, Colors.GRAY.value, rect)
@@ -126,8 +128,9 @@ class MazeGame:
         self.clock = pygame.time.Clock()
         
         self.state = "menu"
-        self.main_menu = MainMenu(self.screen, self.font)
+        self.main_menu = MainMenu(self.screen)
         self.pause_menu = PauseMenu(self.screen, self.font)
+        self.blue_cube_pos = None
 
     def _init_surfaces(self):
         self.cell_surfaces = {}
@@ -189,13 +192,14 @@ class MazeGame:
         
         self.screen.blit(player_surface, (x, y))
 
-
     def initialize_new_maze(self):
         self.maze.fill('#')
         self.set_random_start_end()
         self.player_pos = Position(self.start_pos.x, self.start_pos.y)
         self.camera_pos = Position(self.start_pos.x, self.start_pos.y)
+        self.blue_cube_pos = Position(self.start_pos.x, self.start_pos.y)
         self.generate_maze()
+        self.blue_cube_path = self.find_shortest_path(self.start_pos, self.end_pos)
 
     def set_random_start_end(self):
         corners = [(1, 1), (1, self.maze_size - 2),
@@ -273,6 +277,33 @@ class MazeGame:
                     visited[ny, nx] = True
         return False
 
+    def find_shortest_path(self, start: Position, end: Position) -> List[Position]:
+        queue = deque([start])
+        visited = {start.to_tuple(): None}
+        
+        while queue:
+            current = queue.popleft()
+            if current == end:
+                break
+            
+            for direction in self.DIRECTIONS:
+                neighbor = current + direction
+                if (0 <= neighbor.x < self.maze_size and
+                    0 <= neighbor.y < self.maze_size and
+                    self.maze[neighbor.y, neighbor.x] == '.' and
+                    neighbor.to_tuple() not in visited):
+                    queue.append(neighbor)
+                    visited[neighbor.to_tuple()] = current
+        
+        # Reconstruct the path
+        path = []
+        current = end
+        while current:
+            path.append(current)
+            current = visited[current.to_tuple()]
+        path.reverse()
+        return path
+
     def draw_maze(self):
         self.screen.fill(Colors.WHITE.value)
         
@@ -305,9 +336,12 @@ class MazeGame:
         player_y = self.player_pos.y * self.cell_size + offset_y
         self.draw_player_with_compass(player_x, player_y)
         
+        blue_cube_x = self.blue_cube_pos.x * self.cell_size + offset_x
+        blue_cube_y = self.blue_cube_pos.y * self.cell_size + offset_y
+        self.screen.blit(self.cell_surfaces[Colors.BLUE], (blue_cube_x, blue_cube_y))
+        
         self.draw_hud()
         pygame.display.flip()
-
 
     def draw_hud(self):
         self.screen.blit(self.hud_surface, (10, 10))
@@ -334,7 +368,7 @@ class MazeGame:
                 self.player_pos = new_pos
                 
                 if (new_pos.x, new_pos.y) == self.end_pos.to_tuple():
-                    self.next_level()
+                    self.start_fade_to_white()
         
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -342,7 +376,23 @@ class MazeGame:
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.state = "paused"
 
-    def next_level(self):
+    def start_fade_to_white(self):
+        self.state = "fading_to_white"
+        self.fade_alpha = 0
+
+    def fade_to_white(self):
+        self.fade_alpha += 5
+        fade_surface = Surface((self.screen_size, self.screen_size))
+        fade_surface.fill(Colors.WHITE.value)
+        fade_surface.set_alpha(self.fade_alpha)
+        self.screen.blit(fade_surface, (0, 0))
+        pygame.display.flip()
+        if self.fade_alpha >= 255:
+            self.state = "transition_to_next_level"
+            self.fade_alpha = 0
+
+    def transition_to_next_level(self):
+        pygame.time.wait(1000)  # Delay before starting the new level
         self.level += 1
         self.score += self.maze_size * 10
         
@@ -351,6 +401,11 @@ class MazeGame:
             self.maze = np.full((self.maze_size, self.maze_size), '#', dtype=str)
         
         self.initialize_new_maze()
+        self.state = "play"
+
+    def move_blue_cube(self):
+        if self.blue_cube_path:
+            self.blue_cube_pos = self.blue_cube_path.pop(0)
 
     def run(self):
         while self.running:
@@ -359,11 +414,16 @@ class MazeGame:
                 self.main_menu.draw()
             elif self.state == "play":
                 self.handle_input()
+                self.move_blue_cube()
                 self.draw_maze()
                 self.clock.tick(60)
             elif self.state == "paused":
                 self.state = self.pause_menu.handle_input()
                 self.pause_menu.draw()
+            elif self.state == "fading_to_white":
+                self.fade_to_white()
+            elif self.state == "transition_to_next_level":
+                self.transition_to_next_level()
             elif self.state == "quit":
                 self.running = False
         
