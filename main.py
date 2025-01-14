@@ -392,7 +392,7 @@ class MazeGame:
             self.fade_alpha = 0
 
     def transition_to_next_level(self):
-        pygame.time.wait(1000)  # Delay before starting the new level
+        pygame.time.wait(100)  # Delay before starting the new level
         self.level += 1
         self.score += self.maze_size * 10
         
